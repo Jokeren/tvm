@@ -206,7 +206,7 @@ def _schedule_spatial_pack(cfg, s, data_vec, kernel_vec,
 
 @conv2d_arm_cpu.register('winograd')
 def decl_winograd(cfg, data, kernel, strides, padding, layout, out_dtype):
-    tile_size = 4
+    tile_size = 6
     return _decl_winograd(cfg, data, kernel, strides, padding, layout, out_dtype, tile_size)
 
 def _decl_winograd(cfg, data, kernel, strides, padding, layout, out_dtype, tile_size):
@@ -226,7 +226,37 @@ def _decl_winograd(cfg, data, kernel, strides, padding, layout, out_dtype, tile_
     assert KH == 3 and KW == 3 and HPAD == 1 and WPAD == 1 and HSTR == 1 and WSTR == 1
     data_pad = pad(data, (0, 0, HPAD, WPAD), name="data_pad")
 
-    if tile_size == 4:
+    if tile_size == 6:
+        A_data = np.array([[1,  1,  1,   1,    1,    1,      1,    0],
+                      [0,  1,  -1,  2,   -2,   1/2,   -1/2,   0],
+                      [0,  1,  1,   4,    4,   1/4,    1/4,   0],
+                      [0,  1,  -1,  8,   -8,   1/8,   -1/8,   0],
+                      [0,  1,  1,   16,  16,   1/16,  1/16,   0],
+                      [0,  1,  -1,  32,  -32,  1/32,  -1/32,  1]],
+                     dtype=np.float32).T
+        G_data = np.array([[1,      0,     0],
+                      [-2/9,  -2/9,   -2/9],
+                      [-2/9,   2/9,   -2/9],
+                      [1/90,  1/45,   2/45],
+                      [1/90,  -1/45,  2/45],
+                      [32/45,    16/46, 8/45],
+                      [32/45,   -16/45, 8/45],
+                      [0,      0,     1]],
+                     dtype=np.float32)
+        B_data = np.array([[1,   0,    -21/4,    0,    21/4,     0,    -1,  0],
+                      [0,   1,      1,    -17/4,  -17/4,    1,    1,   0],
+                      [0,   -1,     1,    17/4,   -17/4,   -1,    1,   0],
+                      [0,  1/2,    1/4,   -5/2,   -5/4,     2,    1,   0],
+                      [0,  -1/2,   1/4,    5/2,   -5/4,    -2,    1,   0],
+                      [0,   2,      4,    -5/2,    -5,     1/2,   1,   0],
+                      [0,   -2,     4,     5/2,    -5,    -1/2,   1,   0],
+                      [0,   -1,     0,    21/4,     0,    -21/4,  0,   1]],
+                     dtype=np.float32).T
+
+        assert G_data.shape == (8, 3)
+        assert A_data.shape == (8, 6)
+        assert B_data.shape == (8, 8)
+    elif tile_size == 4:
         G_data = np.array([
             [1 / 4.0, 0, 0],
             [-1 / 6.0, -1 / 6.0, -1 / 6.0],
